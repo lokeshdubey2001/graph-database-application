@@ -1,12 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { api } from '@/lib/api';
 import { useFetch } from '@/hooks/useFetch';
 import TechTag from '@/components/TechTag';
 import { AvatarRow } from '@/components/ui/AvatarRow';
 import { Button } from '@/components/ui/Button';
 import { LoadingSpinner, ErrorMessage } from '@/components/ui/StateComponents';
+import type { TechEcosystemResponse, Technology } from '@/lib/types';
 
 function ColHeader({ hop, label, query }: { hop: string; label: string; query: string }) {
   return (
@@ -41,20 +42,22 @@ function ColHeader({ hop, label, query }: { hop: string; label: string; query: s
 }
 
 export default function ExplorePage() {
-  const [selectedTechId, setSelectedTechId] = useState('tech_react');
+  const [selectedTechId, setSelectedTechId] = useState<string | null>(null);
 
   const techsState = useFetch(() => api.technologies.list(), []);
 
-  const state = useFetch(
-    async () => {
-      const res = await fetch(`/api/technologies/${selectedTechId}/ecosystem`);
-      if (!res.ok) throw new Error('Failed to load ecosystem data');
-      return res.json();
-    },
+  useEffect(() => {
+    if (techsState.status === 'success' && selectedTechId === null && techsState.data.technologies.length > 0) {
+      setSelectedTechId(techsState.data.technologies[0].id);
+    }
+  }, [techsState, selectedTechId]);
+
+  const ecosystemState = useFetch(
+    () => api.technologies.ecosystem(selectedTechId!),
     [selectedTechId]
   );
 
-  const availableTechs = techsState.status === 'success' ? techsState.data.technologies : [];
+  const availableTechs: Technology[] = techsState.status === 'success' ? techsState.data.technologies : [];
 
   return (
     <div className="animate-fade-in">
@@ -75,9 +78,9 @@ export default function ExplorePage() {
           {availableTechs.map((tech) => (
             <Button
               key={tech.id}
-              variant={selectedTechId === tech.id || selectedTechId === tech.name ? 'primary' : 'secondary'}
+              variant={selectedTechId === tech.id ? 'primary' : 'secondary'}
               onClick={() => setSelectedTechId(tech.id)}
-              aria-pressed={selectedTechId === tech.id || selectedTechId === tech.name}
+              aria-pressed={selectedTechId === tech.id}
             >
               {tech.name}
             </Button>
@@ -85,105 +88,111 @@ export default function ExplorePage() {
         </div>
       </div>
 
-      {state.status === 'loading' && <LoadingSpinner />}
+      {(selectedTechId === null || ecosystemState.status === 'loading') && <LoadingSpinner />}
 
-      {state.status === 'error' && (
-        <ErrorMessage message={state.message} onRetry={state.refetch} />
+      {ecosystemState.status === 'error' && (
+        <ErrorMessage message={ecosystemState.message} onRetry={ecosystemState.refetch} />
       )}
 
-      {state.status === 'success' && (
-        <div>
-          <div className="card-inset" style={{ padding: '12px 16px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Traversal path:</span>
-            <code style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: 'var(--accent)' }}>
-              (Developer)-[:BUILT]-&gt;(Project)-[:USES]-&gt;({state.data.technology.name})-[:RELATED_TO]-&gt;(Technology)
-            </code>
+      {ecosystemState.status === 'success' && (() => {
+        const data = ecosystemState.data as TechEcosystemResponse;
+        return (
+          <div>
+            <div className="card-inset" style={{ padding: '12px 16px', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '12px', color: 'var(--text-muted)' }}>Traversal path:</span>
+              <code style={{ fontSize: '12px', fontFamily: 'var(--font-mono)', color: 'var(--accent)', wordBreak: 'break-all' }}>
+                (Developer)-[:BUILT]-&gt;(Project)-[:USES]-&gt;({data.technology.name})-[:RELATED_TO]-&gt;(Technology)
+              </code>
+            </div>
+
+            <div
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
+                gap: '16px',
+              }}
+            >
+              <div className="card" style={{ padding: '20px' }}>
+                <ColHeader
+                  hop="Hop 1-2"
+                  label="Developers & Projects"
+                  query={`(d)-[:BUILT]->(p)-[:USES]->(${data.technology.name})`}
+                />
+                {data.developers.length === 0 ? (
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No developers found.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {data.developers.map((dev, idx) => (
+                      <AvatarRow
+                        key={`${dev.id}-${dev.projectName}-${idx}`}
+                        id={dev.id}
+                        name={dev.name}
+                        avatarUrl={dev.avatarUrl}
+                        subtitle={dev.projectName}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="card" style={{ padding: '20px' }}>
+                <ColHeader
+                  hop="Hop 3"
+                  label="Co-occurring Technologies"
+                  query="(p)-[:USES]->(coTech)"
+                />
+                {data.coTechnologies.length === 0 ? (
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>None found.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {data.coTechnologies.map((co) => (
+                      <div
+                        key={co.id}
+                        className="card-inset"
+                        style={{ padding: '9px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                      >
+                        <TechTag tech={co} />
+                        <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
+                          {co.projectCount}p
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="card" style={{ padding: '20px' }}>
+                <ColHeader
+                  hop="Hop 4"
+                  label="Graph-Related Technologies"
+                  query={`(${data.technology.name})-[:RELATED_TO]->(adj)`}
+                />
+                {data.relatedTechnologies.length === 0 ? (
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>None found.</p>
+                ) : (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    {data.relatedTechnologies
+                      .slice()
+                      .sort((a, b) => b.strength - a.strength)
+                      .map((rel) => (
+                        <div
+                          key={rel.id}
+                          className="card-inset"
+                          style={{ padding: '9px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+                        >
+                          <TechTag tech={rel} />
+                          <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+                            {rel.strength}
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
-
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))',
-              gap: '16px',
-            }}
-          >
-            <div className="card" style={{ padding: '20px' }}>
-              <ColHeader
-                hop="Hop 1-2"
-                label="Developers & Projects"
-                query={`(d)-[:BUILT]->(p)-[:USES]->(${state.data.technology.name})`}
-              />
-              {state.data.developers.length === 0 ? (
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No developers found.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {state.data.developers.map((dev: { id: string; name: string; avatarUrl: string; projectName: string }, idx: number) => (
-                    <AvatarRow
-                      key={`${dev.id}-${dev.projectName}-${idx}`}
-                      id={dev.id}
-                      name={dev.name}
-                      avatarUrl={dev.avatarUrl}
-                      subtitle={dev.projectName}
-                    />
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="card" style={{ padding: '20px' }}>
-              <ColHeader
-                hop="Hop 3"
-                label="Co-occurring Technologies"
-                query="(p)-[:USES]->(coTech)"
-              />
-              {state.data.coTechnologies.length === 0 ? (
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>None found.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {state.data.coTechnologies.map((co: { id: string; name: string; domain: 'frontend' | 'backend' | 'infra' | 'data'; projectCount: number }) => (
-                    <div
-                      key={co.id}
-                      className="card-inset"
-                      style={{ padding: '9px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                    >
-                      <TechTag tech={co} />
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)' }}>
-                        {co.projectCount}p
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="card" style={{ padding: '20px' }}>
-              <ColHeader
-                hop="Hop 4"
-                label="Graph-Related Technologies"
-                query={`(${state.data.technology.name})-[:RELATED_TO]->(adj)`}
-              />
-              {state.data.relatedTechnologies.length === 0 ? (
-                <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>None found.</p>
-              ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
-                  {state.data.relatedTechnologies.map((rel: { id: string; name: string; domain: 'frontend' | 'backend' | 'infra' | 'data'; strength: number }) => (
-                    <div
-                      key={rel.id}
-                      className="card-inset"
-                      style={{ padding: '9px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-                    >
-                      <TechTag tech={rel} />
-                      <span style={{ fontSize: '11px', color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
-                        {rel.strength}
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

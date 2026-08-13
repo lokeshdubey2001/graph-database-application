@@ -12,7 +12,7 @@ Traditional developer directories store flat lists of skills or rely on keyword 
 
 - **Direct Skill Knowledge**: Developers explicitly possess skills at specific proficiency levels (`beginner`, `intermediate`, `expert`).
 - **Project Provenance**: Developers build projects that leverage specific technologies for client companies.
-- **Graph Traversal & Ecosystem Discovery**: Navigating 3-hop and 5-hop relationships reveals developers who work with complementary tech stacks and co-occurring technologies across projects.
+- **Graph Traversal & Ecosystem Discovery**: Navigating 3-hop and 5-hop relationships reveals developers who work with complementary tech stacks, shared client companies, and co-occurring technologies across projects.
 
 ---
 
@@ -82,7 +82,7 @@ Graph database index-free adjacency allows multi-hop traversals to execute in co
 | Relationship | Source Node → Target Node | Properties | Description |
 |---|---|---|---|
 | `KNOWS` | `Developer` → `Skill` | `level` (`beginner` \| `intermediate` \| `expert`), `since` | Explicit skill declaration |
-| `BUILT` | `Developer` → `Project` | `role` (`lead` \| `solo` \| `contributor`), `year` | Project authorship |
+| `BUILT` | `Developer` → `Project` | `role` (`solo` \| `lead` \| `contributor`), `year` | Project authorship |
 | `USES` | `Project` → `Technology` | `primary` (boolean) | Technologies used in project |
 | `FOR` | `Project` → `Company` | — | Target company for project |
 | `RELATED_TO` | `Technology` → `Technology` | `strength` (number 0–1) | Conceptual tech stack adjacency |
@@ -120,7 +120,7 @@ DevGraph enforces strict layer separation. All Cypher query execution and databa
                             ▼
 ┌────────────────────────────────────────────────────────┐
 │                 Server API Route Handlers              │
-│       (/api/developers, /api/skills, /api/search)      │
+│     (/api/developers, /api/skills, /api/technologies)  │
 └───────────────────────────┬────────────────────────────┘
                             │ Parameterized Query Calls
                             ▼
@@ -133,7 +133,7 @@ DevGraph enforces strict layer separation. All Cypher query execution and databa
 ┌────────────────────────────────────────────────────────┐
 │                    CognoDB Instance                    │
 │            (Node Graph Storage & Query Engine)         │
-└────────────────────────────────────────────────────────┘
+└───────────────────────────┬────────────────────────────┘
 ```
 
 ---
@@ -142,19 +142,20 @@ DevGraph enforces strict layer separation. All Cypher query execution and databa
 
 All database interactions use parameterized openCypher queries executed via the official `neo4j-driver` session layer.
 
-### 1. Developer Profile & Related Skills (2-hop)
+### 1. Developer Profile Projects & Technologies (Single Query Aggregation)
 
-Retrieves a developer profile alongside their skills and projects with associated technologies in a single parameterized round-trip:
+Retrieves a developer's projects along with their linked client companies and technologies using `OPTIONAL MATCH` and `collect()` without N+1 query loops:
 
 ```cypher
-MATCH (d:Developer {id: $id})
-OPTIONAL MATCH (d)-[k:KNOWS]->(s:Skill)
-OPTIONAL MATCH (d)-[b:BUILT]->(p:Project)
-OPTIONAL MATCH (p)-[u:USES]->(t:Technology)
+MATCH (d:Developer {id: $id})-[b:BUILT]->(p:Project)
 OPTIONAL MATCH (p)-[:FOR]->(c:Company)
-RETURN d,
-       collect(DISTINCT { skill: s, level: k.level, since: k.since }) AS skills,
-       collect(DISTINCT { project: p, role: b.role, company: c, techs: collect(DISTINCT t) }) AS projects
+OPTIONAL MATCH (p)-[:USES]->(t:Technology)
+WITH p, b, c, collect(DISTINCT {id: t.id, name: t.name, domain: t.domain}) AS technologies
+RETURN p.id AS id, p.name AS name, p.description AS description, p.url AS url,
+       p.year AS year, b.role AS role,
+       c.id AS compId, c.name AS compName, c.industry AS compIndustry,
+       technologies
+ORDER BY p.year DESC
 ```
 
 ### 2. Skill Peers (3-hop Traversal)
@@ -164,59 +165,41 @@ Finds other developers who share skill competencies with a target developer (`De
 ```cypher
 MATCH (d:Developer {id: $id})-[:KNOWS]->(s:Skill)<-[:KNOWS]-(peer:Developer)
 WHERE peer.id <> $id
-RETURN peer.id AS id,
-       peer.name AS name,
-       peer.avatarUrl AS avatarUrl,
-       collect(DISTINCT s.name) AS sharedSkills,
-       count(DISTINCT s) AS sharedCount
-ORDER BY sharedCount DESC, peer.name ASC
-LIMIT 5
+RETURN peer.id AS id, peer.name AS name, peer.bio AS bio, peer.location AS location,
+       peer.avatarUrl AS avatarUrl, peer.yearsExp AS yearsExp, s.name AS skillName
 ```
 
-### 3. Tech Stack Traversal Peers (5-hop Graph Showcase)
+### 3. Company Peers (3-hop Client Company Traversal)
+
+Discovers developers connected through shared client companies (`Developer → Project → Company ← Project ← Developer`):
+
+```cypher
+MATCH (d:Developer {id: $id})-[:BUILT]->(:Project)-[:FOR]->(c:Company)<-[:FOR]-(:Project)<-[:BUILT]-(peer:Developer)
+WHERE peer.id <> $id
+RETURN peer.id AS id, peer.name AS name, peer.bio AS bio, peer.location AS location,
+       peer.avatarUrl AS avatarUrl, peer.yearsExp AS yearsExp, c.name AS companyName
+ORDER BY peer.name ASC
+```
+
+### 4. Tech Stack Traversal Peers (5-hop Graph Showcase)
 
 Discovers developers connected through technology graph adjacency (`Developer → Project → Technology → RELATED_TO → Technology ← Project ← Developer`):
 
 ```cypher
 MATCH (d:Developer {id: $id})-[:BUILT]->(:Project)-[:USES]->(t:Technology)-[:RELATED_TO]-(adj:Technology)<-[:USES]-(:Project)<-[:BUILT]-(peer:Developer)
 WHERE peer.id <> $id
-RETURN peer.id AS id,
-       peer.name AS name,
-       peer.avatarUrl AS avatarUrl,
-       collect(DISTINCT adj.name) AS bridgeTechs,
-       count(DISTINCT adj) AS relevance
-ORDER BY relevance DESC, peer.name ASC
-LIMIT 5
+RETURN peer.id AS id, peer.name AS name, peer.bio AS bio, peer.location AS location,
+       peer.avatarUrl AS avatarUrl, peer.yearsExp AS yearsExp, adj.name AS bridgeTech
 ```
 
-### 4. Technology Ecosystem & Co-occurrence Traversal
+### 5. Technology Ecosystem & Co-occurrence Traversal
 
 Walks project graphs to discover co-occurring technologies used alongside an anchor technology in developer projects:
 
 ```cypher
-MATCH (t:Technology)
-WHERE toLower(t.id) = toLower($techId) OR toLower(t.name) = toLower($techId)
-MATCH (t)<-[:USES]-(p:Project)<-[:BUILT]-(d:Developer)
-MATCH (p)-[:USES]->(coTech:Technology)
-WHERE coTech.id <> t.id
-RETURN coTech.id AS id, coTech.name AS name, coTech.domain AS domain, count(DISTINCT p) AS projectCount
-ORDER BY projectCount DESC
-```
-
-### 5. Multi-Filter Search Query
-
-Filters developers by direct skill ownership (`:KNOWS`) and/or project technology usage (`:BUILT → :USES`):
-
-```cypher
-MATCH (d:Developer)
-WHERE ($skill IS NULL OR $skill = '' OR EXISTS {
-  MATCH (d)-[:KNOWS]->(s:Skill) WHERE toLower(s.name) = toLower($skill)
-})
-AND ($tech IS NULL OR $tech = '' OR EXISTS {
-  MATCH (d)-[:BUILT]->(:Project)-[:USES]->(t:Technology) WHERE toLower(t.name) = toLower($tech)
-})
-RETURN d.id AS id, d.name AS name, d.bio AS bio, d.location AS location, d.avatarUrl AS avatarUrl, d.yearsExp AS yearsExp
-ORDER BY d.name ASC
+MATCH (t:Technology {id: $id})<-[:USES]-(p:Project)-[:USES]->(coTech:Technology)
+WHERE coTech.id <> $id
+RETURN coTech.id AS id, coTech.name AS name, coTech.domain AS domain, p.id AS projId
 ```
 
 ---
@@ -232,7 +215,6 @@ ORDER BY d.name ASC
 │   │   ├── api/
 │   │   │   ├── developers/      # API endpoints for developer profiles & relations
 │   │   │   ├── health/          # API endpoint for database status check
-│   │   │   ├── search/          # API endpoint for global search
 │   │   │   ├── skills/          # API endpoints for skill list & ecosystems
 │   │   │   └── technologies/    # API endpoints for technology list & ecosystems
 │   │   ├── developers/[id]/     # Profile page with multi-hop peer traversal
@@ -256,10 +238,9 @@ ORDER BY d.name ASC
 │       ├── types.ts             # TypeScript interface definitions
 │       ├── queries/
 │       │   ├── developers.ts    # Parameterized developer Cypher queries
-│       │   ├── search.ts        # Parameterized search Cypher queries
 │       │   └── skills.ts        # Parameterized skill & tech Cypher queries
 │       └── utils/
-│           └── record.ts        # Neo4j record integer parsing & string extraction helpers
+│           └── record.ts        # Neo4j record integer parsing helper
 ├── .env.example                 # Environment variable template
 ├── package.json                 # Project dependencies & scripts
 ├── tsconfig.json                # TypeScript configuration
@@ -330,8 +311,6 @@ ORDER BY d.name ASC
 
 ## Screenshots
 
-*(Placeholders for application interface screenshots)*
-
 ### Developer Search & Explorer
 ![Developer Explorer Search](/public/screenshots/home.png)
 
@@ -369,9 +348,10 @@ npm run start
 
 1. **No Client-Side Cypher Execution**: All Cypher queries are written server-side in parameterized functions (`src/lib/queries/*`). The frontend interacts strictly via typed API endpoints.
 2. **Official Neo4j Driver Singleton**: Database connections reuse a single driver instance across server invocations (`src/lib/neo4j.ts`), managing sessions securely with automatic cleanup (`session.close()`).
-3. **No Heavy Graph Visualization Libraries**: Rather than embedding complex canvas/force-directed libraries, graph relationships are rendered using responsive, semantic UI lists, column hops, and relationship badges.
-4. **Sharp Geometric Design System**: Uses a technical visual aesthetic with CSS custom variables for Light and Dark modes (`globals.css`), eliminating arbitrary rounded corners and unnecessary decorative bloat.
-5. **Strict Atomic Component Reusability**: UI elements (`Button`, `Input`, `Select`, `Badge`, `AvatarRow`, `ThemeToggle`) are standardized and reused across all pages to ensure UI consistency.
+3. **Single-Query Aggregations**: Eliminates N+1 database queries by using `OPTIONAL MATCH` and openCypher `collect()` to fetch complex node trees in single round-trips.
+4. **No Heavy Graph Visualization Libraries**: Rather than embedding complex canvas/force-directed libraries, graph relationships are rendered using responsive, semantic UI lists, column hops, and relationship badges.
+5. **Sharp Geometric Design System**: Uses a technical visual aesthetic with CSS custom variables for Light and Dark modes (`globals.css`), eliminating arbitrary rounded corners and unnecessary decorative bloat.
+6. **Strict Atomic Component Reusability**: UI elements (`Button`, `Input`, `Select`, `Badge`, `AvatarRow`, `ThemeToggle`) are standardized and reused across all pages to ensure UI consistency.
 
 ---
 

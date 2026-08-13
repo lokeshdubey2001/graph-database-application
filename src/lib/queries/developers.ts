@@ -6,6 +6,7 @@ import type {
   DeveloperProject,
   DeveloperProfileResponse,
   RelatedDevelopersResponse,
+  CompanyPeersResponse,
 } from '@/lib/types';
 
 export async function getDevelopers(filters?: {
@@ -78,49 +79,43 @@ export async function getDeveloperById(
   const projectsResult = await executeQuery(
     `MATCH (d:Developer {id: $id})-[b:BUILT]->(p:Project)
      OPTIONAL MATCH (p)-[:FOR]->(c:Company)
-     RETURN p.id AS id, p.name AS name, p.description AS description, p.url AS url, p.year AS year, b.role AS role,
-            c.id AS compId, c.name AS compName, c.industry AS compIndustry
+     OPTIONAL MATCH (p)-[:USES]->(t:Technology)
+     WITH p, b, c, collect(DISTINCT {id: t.id, name: t.name, domain: t.domain}) AS technologies
+     RETURN p.id AS id, p.name AS name, p.description AS description, p.url AS url,
+            p.year AS year, b.role AS role,
+            c.id AS compId, c.name AS compName, c.industry AS compIndustry,
+            technologies
      ORDER BY p.year DESC`,
     { id }
   );
 
-  const projects: DeveloperProject[] = await Promise.all(
-    projectsResult.records.map(async (r) => {
-      const projId = String(r.get('id'));
-      const compId = r.get('compId');
-      const company = compId
+  const projects: DeveloperProject[] = projectsResult.records.map((r) => {
+    const compId = r.get('compId');
+    const rawTechs: Array<{ id: unknown; name: unknown; domain: unknown }> = r.get('technologies') ?? [];
+
+    return {
+      id: String(r.get('id')),
+      name: String(r.get('name')),
+      description: String(r.get('description')),
+      url: String(r.get('url')),
+      year: extractInteger(r.get('year')),
+      role: r.get('role'),
+      company: compId
         ? {
             id: String(compId),
             name: String(r.get('compName')),
             industry: String(r.get('compIndustry')),
           }
-        : null;
-
-      const techResult = await executeQuery(
-        `MATCH (p:Project {id: $projId})-[u:USES]->(t:Technology)
-         RETURN t.id AS id, t.name AS name, t.domain AS domain
-         ORDER BY t.name ASC`,
-        { projId }
-      );
-
-      const technologies = techResult.records.map((tr) => ({
-        id: String(tr.get('id')),
-        name: String(tr.get('name')),
-        domain: tr.get('domain'),
-      }));
-
-      return {
-        id: projId,
-        name: String(r.get('name')),
-        description: String(r.get('description')),
-        url: String(r.get('url')),
-        year: extractInteger(r.get('year')),
-        role: r.get('role'),
-        company,
-        technologies,
-      };
-    })
-  );
+        : null,
+      technologies: rawTechs
+        .filter((t) => t.id !== null && t.id !== undefined)
+        .map((t) => ({
+          id: String(t.id),
+          name: String(t.name),
+          domain: t.domain as 'frontend' | 'backend' | 'infra' | 'data',
+        })),
+    };
+  });
 
   return { developer, skills, projects };
 }
@@ -202,4 +197,45 @@ export async function getRelatedDevelopers(
     .slice(0, 5);
 
   return { skillPeers, techPeers };
+}
+
+export async function getCompanyPeers(id: string): Promise<CompanyPeersResponse> {
+  const result = await executeQuery(
+    `MATCH (d:Developer {id: $id})-[:BUILT]->(:Project)-[:FOR]->(c:Company)<-[:FOR]-(:Project)<-[:BUILT]-(peer:Developer)
+     WHERE peer.id <> $id
+     RETURN peer.id AS id, peer.name AS name, peer.bio AS bio, peer.location AS location,
+            peer.avatarUrl AS avatarUrl, peer.yearsExp AS yearsExp, c.name AS companyName
+     ORDER BY peer.name ASC`,
+    { id }
+  );
+
+  const peersMap = new Map<string, { peer: Developer; companies: Set<string> }>();
+  for (const r of result.records) {
+    const peerId = String(r.get('id'));
+    if (!peersMap.has(peerId)) {
+      peersMap.set(peerId, {
+        peer: {
+          id: peerId,
+          name: String(r.get('name')),
+          bio: String(r.get('bio')),
+          location: String(r.get('location')),
+          avatarUrl: String(r.get('avatarUrl')),
+          yearsExp: extractInteger(r.get('yearsExp')),
+        },
+        companies: new Set(),
+      });
+    }
+    peersMap.get(peerId)?.companies.add(String(r.get('companyName')));
+  }
+
+  const peers = Array.from(peersMap.values())
+    .map((item) => ({
+      ...item.peer,
+      sharedCompanies: Array.from(item.companies),
+      sharedCount: item.companies.size,
+    }))
+    .sort((a, b) => b.sharedCount - a.sharedCount)
+    .slice(0, 5);
+
+  return { companyPeers: peers };
 }

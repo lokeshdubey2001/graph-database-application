@@ -20,6 +20,7 @@ export default function DeveloperProfilePage({ params }: PageProps) {
 
   const profileState = useFetch(() => api.developers.get(id), [id]);
   const relatedState = useFetch(() => api.developers.related(id), [id]);
+  const companyPeersState = useFetch(() => api.developers.companyPeers(id), [id]);
 
   if (profileState.status === 'loading') {
     return <DeveloperProfileSkeleton />;
@@ -146,7 +147,7 @@ export default function DeveloperProfilePage({ params }: PageProps) {
           <div style={{ marginBottom: '16px' }}>
             <SectionHeading>Graph Traversal: Related Developers</SectionHeading>
             <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
-              Developers connected to {developer.name} through shared skills or complementary technology stacks.
+              Developers connected to {developer.name} through shared skills, shared client companies, or complementary technology stacks.
             </p>
           </div>
 
@@ -173,6 +174,32 @@ export default function DeveloperProfilePage({ params }: PageProps) {
                       badgeColor="var(--accent)"
                     />
                   ))
+                )}
+              </div>
+            </div>
+
+            <div className="card card-responsive-padding" style={{ padding: '20px', borderRadius: 0, minWidth: 0 }}>
+              <div style={{ marginBottom: '14px' }}>
+                <SectionHeading>Company Peers</SectionHeading>
+                <code className="mono" style={{ color: 'var(--text-muted)', fontSize: '11px', wordBreak: 'break-all' }}>
+                  (d)-[:BUILT]-&gt;[:FOR]-&gt;(c)&lt;-[:FOR]-(peer)
+                </code>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                {companyPeersState.status === 'success' && companyPeersState.data.companyPeers.length > 0 ? (
+                  companyPeersState.data.companyPeers.map((peer) => (
+                    <AvatarRow
+                      key={peer.id}
+                      id={peer.id}
+                      name={peer.name}
+                      avatarUrl={peer.avatarUrl}
+                      subtitle={peer.sharedCompanies.join(', ')}
+                      badgeText={peer.sharedCount}
+                      badgeColor="#f59e0b"
+                    />
+                  ))
+                ) : (
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>None found.</p>
                 )}
               </div>
             </div>

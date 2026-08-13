@@ -59,8 +59,16 @@ export interface RelatedDevelopersResponse {
   techPeers: (Developer & { bridgeTechs: string[]; relevance: number })[];
 }
 
+export interface CompanyPeersResponse {
+  companyPeers: (Developer & { sharedCompanies: string[]; sharedCount: number })[];
+}
+
 export interface SkillsListResponse {
   skills: Skill[];
+}
+
+export interface TechnologiesListResponse {
+  technologies: Technology[];
 }
 
 export interface SkillEcosystemResponse {
@@ -68,6 +76,13 @@ export interface SkillEcosystemResponse {
   developers: (Developer & { level: string })[];
   technologies: (Technology & { devCount: number })[];
   relatedTechnologies: (Technology & { weight: number })[];
+}
+
+export interface TechEcosystemResponse {
+  technology: Technology;
+  developers: (Developer & { projectName: string })[];
+  coTechnologies: (Technology & { projectCount: number })[];
+  relatedTechnologies: (Technology & { strength: number })[];
 }
 
 export interface SearchResponse {

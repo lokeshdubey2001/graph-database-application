@@ -2,9 +2,11 @@ import type {
   DeveloperListResponse,
   DeveloperProfileResponse,
   RelatedDevelopersResponse,
+  CompanyPeersResponse,
   SkillsListResponse,
+  TechnologiesListResponse,
   SkillEcosystemResponse,
-  SearchResponse,
+  TechEcosystemResponse,
 } from './types';
 
 const BASE = '/api';
@@ -31,6 +33,8 @@ export const api = {
       fetchJson<DeveloperProfileResponse>(`${BASE}/developers/${id}`),
     related: (id: string) =>
       fetchJson<RelatedDevelopersResponse>(`${BASE}/developers/${id}/related`),
+    companyPeers: (id: string) =>
+      fetchJson<CompanyPeersResponse>(`${BASE}/developers/${id}/companies`),
   },
   skills: {
     list: () => fetchJson<SkillsListResponse>(`${BASE}/skills`),
@@ -38,9 +42,8 @@ export const api = {
       fetchJson<SkillEcosystemResponse>(`${BASE}/skills/${id}/ecosystem`),
   },
   technologies: {
-    list: () =>
-      fetchJson<{ technologies: Array<{ id: string; name: string; domain: string }> }>(`${BASE}/technologies`),
+    list: () => fetchJson<TechnologiesListResponse>(`${BASE}/technologies`),
+    ecosystem: (id: string) =>
+      fetchJson<TechEcosystemResponse>(`${BASE}/technologies/${id}/ecosystem`),
   },
-  search: (q: string) =>
-    fetchJson<SearchResponse>(`${BASE}/search?q=${encodeURIComponent(q)}`),
 };
