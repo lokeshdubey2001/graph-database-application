@@ -18,11 +18,11 @@ export default function HomePage() {
   );
 
   const skillsState = useFetch(() => api.skills.list(), []);
+  const techsState = useFetch(() => api.technologies.list(), []);
 
   const filteredDevelopers = useMemo(() => {
     if (state.status !== 'success') return [];
     if (!query.trim()) return state.data.developers;
-
     const q = query.toLowerCase().trim();
     return state.data.developers.filter(
       (d) =>
@@ -37,36 +37,32 @@ export default function HomePage() {
     return skillsState.data.skills.map((s) => s.name);
   }, [skillsState]);
 
-  const techOptions = [
-    'React',
-    'Next.js',
-    'TypeScript',
-    'Node.js',
-    'Python',
-    'Go',
-    'PostgreSQL',
-    'CognoDB',
-    'Redis',
-    'Docker',
-    'Kubernetes',
-    'Apache Kafka',
-  ];
+  const techOptions = useMemo(() => {
+    if (techsState.status !== 'success') return [];
+    return techsState.data.technologies.map((t) => t.name);
+  }, [techsState]);
+
+  const count = state.status === 'success' ? filteredDevelopers.length : null;
 
   return (
-    <div className="space-y-8 animate-fade-in">
-      <div className="text-center max-w-3xl mx-auto space-y-3 py-4">
-        <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-950/80 border border-indigo-800/60 text-xs font-semibold text-indigo-300 mb-2">
-          <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse" />
-          Powered by CognoDB openCypher Graph Engine
-        </div>
-        <h1 className="text-4xl font-extrabold text-slate-100 tracking-tight sm:text-5xl">
-          Dev<span className="text-indigo-400">Graph</span> Explorer
+    <div className="animate-fade-in">
+      <div style={{ marginBottom: '32px' }}>
+        <h1
+          style={{
+            fontSize: '22px',
+            fontWeight: 700,
+            color: 'var(--text-primary)',
+            letterSpacing: '-0.02em',
+            margin: '0 0 6px',
+          }}
+        >
+          Developer Explorer
         </h1>
-        <p className="text-base text-slate-300 leading-relaxed max-w-2xl mx-auto font-medium">
-          Explore developers through their skills and project technologies.
-        </p>
-        <p className="text-xs text-slate-400 max-w-xl mx-auto">
-          Discover direct competency relationships <code className="text-indigo-300 font-mono">(Developer)-[:KNOWS]-&gt;(Skill)</code> and multi-hop project stack relationships <code className="text-emerald-300 font-mono">(Developer)-[:BUILT]-&gt;(Project)-[:USES]-&gt;(Technology)</code>.
+        <p style={{ fontSize: '14px', color: 'var(--text-secondary)', margin: 0 }}>
+          Browse developers by direct skills{' '}
+          <code className="mono" style={{ color: 'var(--accent)' }}>[:KNOWS]</code>
+          {' '}or project technology{' '}
+          <code className="mono" style={{ color: '#34d399' }}>[:BUILT]→[:USES]</code>.
         </p>
       </div>
 
@@ -89,17 +85,36 @@ export default function HomePage() {
 
       {state.status === 'success' && filteredDevelopers.length === 0 && (
         <EmptyState
-          title="No developers found for this relationship query"
-          description="Try selecting a different skill or technology filter to explore graph connections."
+          title="No developers match"
+          description="Try a different skill or technology filter, or clear the search term."
         />
       )}
 
       {state.status === 'success' && filteredDevelopers.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredDevelopers.map((dev) => (
-            <DeveloperCard key={dev.id} developer={dev} />
-          ))}
-        </div>
+        <>
+          {count !== null && (
+            <p
+              style={{
+                fontSize: '12px',
+                color: 'var(--text-muted)',
+                marginBottom: '16px',
+              }}
+            >
+              {count} {count === 1 ? 'developer' : 'developers'} found
+            </p>
+          )}
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+              gap: '16px',
+            }}
+          >
+            {filteredDevelopers.map((dev) => (
+              <DeveloperCard key={dev.id} developer={dev} />
+            ))}
+          </div>
+        </>
       )}
     </div>
   );

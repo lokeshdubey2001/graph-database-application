@@ -1,18 +1,10 @@
 import { executeQuery } from '@/lib/neo4j';
+import { extractInteger } from '@/lib/utils/record';
 import type {
   Skill,
   SkillsListResponse,
   SkillEcosystemResponse,
 } from '@/lib/types';
-
-function extractInteger(val: unknown): number {
-  if (val === null || val === undefined) return 0;
-  if (typeof val === 'number') return val;
-  if (typeof val === 'object' && 'toNumber' in val && typeof (val as { toNumber: () => number }).toNumber === 'function') {
-    return (val as { toNumber: () => number }).toNumber();
-  }
-  return Number(val) || 0;
-}
 
 export async function getSkills(): Promise<SkillsListResponse> {
   const result = await executeQuery(
@@ -28,6 +20,22 @@ export async function getSkills(): Promise<SkillsListResponse> {
   }));
 
   return { skills };
+}
+
+export async function getTechnologies(): Promise<{ technologies: Array<{ id: string; name: string; domain: string }> }> {
+  const result = await executeQuery(
+    `MATCH (t:Technology)
+     RETURN t.id AS id, t.name AS name, t.domain AS domain
+     ORDER BY t.name ASC`
+  );
+
+  const technologies = result.records.map((r) => ({
+    id: String(r.get('id')),
+    name: String(r.get('name')),
+    domain: String(r.get('domain')),
+  }));
+
+  return { technologies };
 }
 
 export async function getSkillEcosystem(

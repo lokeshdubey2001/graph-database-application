@@ -1,4 +1,5 @@
 import type { DeveloperSkill, Skill } from '@/lib/types';
+import { Badge } from '@/components/ui/Badge';
 
 interface SkillBadgeProps {
   skill: Skill | DeveloperSkill;
@@ -6,18 +7,24 @@ interface SkillBadgeProps {
 
 export default function SkillBadge({ skill }: SkillBadgeProps) {
   const isDevSkill = 'level' in skill;
-  const levelClass = isDevSkill ? `badge-${(skill as DeveloperSkill).level}` : 'badge-intermediate';
+  const level = isDevSkill ? (skill as DeveloperSkill).level : 'intermediate';
 
   return (
-    <span
-      className={`px-2.5 py-1 text-xs font-medium rounded-md border ${levelClass} inline-flex items-center gap-1.5`}
-    >
+    <Badge variant={level as 'expert' | 'intermediate' | 'beginner'}>
       <span>{skill.name}</span>
       {isDevSkill && (
-        <span className="opacity-75 text-[10px] uppercase tracking-wider font-semibold">
-          {(skill as DeveloperSkill).level}
+        <span
+          style={{
+            fontSize: '10px',
+            fontWeight: 600,
+            opacity: 0.7,
+            textTransform: 'uppercase',
+            letterSpacing: '0.04em',
+          }}
+        >
+          {level}
         </span>
       )}
-    </span>
+    </Badge>
   );
 }

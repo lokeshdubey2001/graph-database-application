@@ -2,11 +2,14 @@
 
 import { use } from 'react';
 import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useFetch } from '@/hooks/useFetch';
 import SkillBadge from '@/components/SkillBadge';
 import ProjectCard from '@/components/ProjectCard';
-import { LoadingSpinner, ErrorMessage } from '@/components/ui/StateComponents';
+import { SectionHeading } from '@/components/ui/SectionHeading';
+import { AvatarRow } from '@/components/ui/AvatarRow';
+import { DeveloperProfileSkeleton, ErrorMessage } from '@/components/ui/StateComponents';
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -19,79 +22,76 @@ export default function DeveloperProfilePage({ params }: PageProps) {
   const relatedState = useFetch(() => api.developers.related(id), [id]);
 
   if (profileState.status === 'loading') {
-    return <LoadingSpinner />;
+    return <DeveloperProfileSkeleton />;
   }
 
   if (profileState.status === 'error') {
     return <ErrorMessage message={profileState.message} onRetry={profileState.refetch} />;
   }
 
-  if (profileState.status !== 'success') {
-    return null;
-  }
+  if (profileState.status !== 'success') return null;
 
   const { developer, skills, projects } = profileState.data;
 
-  const allTechnologiesMap = new Map<string, { id: string; name: string; domain: string }>();
+  const allTechsMap = new Map<string, { id: string; name: string; domain: string }>();
   const allCompaniesMap = new Map<string, { id: string; name: string; industry: string }>();
-
   projects.forEach((p) => {
-    if (p.company) {
-      allCompaniesMap.set(p.company.id, p.company);
-    }
-    p.technologies.forEach((t) => {
-      allTechnologiesMap.set(t.id, t);
-    });
+    if (p.company) allCompaniesMap.set(p.company.id, p.company);
+    p.technologies.forEach((t) => allTechsMap.set(t.id, t));
   });
-
-  const technologies = Array.from(allTechnologiesMap.values());
   const companies = Array.from(allCompaniesMap.values());
 
   return (
-    <div className="space-y-10 animate-fade-in pb-12">
+    <div className="animate-fade-in" style={{ maxWidth: '960px', margin: '0 auto', width: '100%' }}>
       <Link
         href="/"
-        className="inline-flex items-center gap-2 text-sm text-slate-400 hover:text-indigo-400 font-medium transition-colors"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: '6px',
+          fontSize: '13px',
+          color: 'var(--text-muted)',
+          textDecoration: 'none',
+          marginBottom: '20px',
+        }}
       >
-        <span>&larr;</span> Back to Developers
+        <ArrowLeft size={14} />
+        <span>All developers</span>
       </Link>
 
-      <div className="card p-8 bg-slate-900/60 relative overflow-hidden">
-        <div className="flex flex-col md:flex-row items-start md:items-center gap-6">
-          <img
-            src={developer.avatarUrl}
-            alt={developer.name}
-            className="w-24 h-24 rounded-full object-cover border-2 border-indigo-500/50 shadow-xl"
-          />
-          <div className="space-y-2 flex-1">
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <div>
-                <h1 className="text-3xl font-extrabold text-slate-100 tracking-tight">
-                  {developer.name}
-                </h1>
-                <p className="text-sm text-slate-400 flex items-center gap-2 mt-1">
-                  <span>📍 {developer.location}</span>
-                  <span>&bull;</span>
-                  <span>{developer.yearsExp} Years Professional Experience</span>
-                </p>
-              </div>
+      <div
+        className="card card-responsive-padding"
+        style={{ padding: '24px', marginBottom: '24px', display: 'flex', flexWrap: 'wrap', alignItems: 'flex-start', gap: '16px', borderRadius: 0, minWidth: 0 }}
+      >
+        <img
+          src={developer.avatarUrl}
+          alt={developer.name}
+          style={{ width: '56px', height: '56px', borderRadius: 0, objectFit: 'cover', border: '1px solid var(--border-color)', flexShrink: 0 }}
+        />
+        <div style={{ flex: '1 1 200px', minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '12px', flexWrap: 'wrap' }}>
+            <div style={{ minWidth: 0 }}>
+              <h1 style={{ fontSize: '18px', fontWeight: 700, letterSpacing: '-0.015em', color: 'var(--text-primary)', margin: '0 0 4px', wordBreak: 'break-word' }}>
+                {developer.name}
+              </h1>
+              <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
+                {developer.location} • {developer.yearsExp} years experience
+              </p>
             </div>
-            <p className="text-base text-slate-300 max-w-3xl leading-relaxed pt-1">
-              {developer.bio}
-            </p>
           </div>
+          <p style={{ fontSize: '13px', color: 'var(--text-secondary)', lineHeight: '1.6', margin: '10px 0 0', wordBreak: 'break-word' }}>
+            {developer.bio}
+          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-        <div className="card p-6 space-y-4">
-          <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2 border-b border-slate-800 pb-3">
-            <span>⚡</span> Known Skills &amp; Proficiencies
-          </h2>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+        <div className="card card-responsive-padding" style={{ padding: '20px', borderRadius: 0, minWidth: 0 }}>
+          <SectionHeading>Skills &amp; Proficiencies</SectionHeading>
           {skills.length === 0 ? (
-            <p className="text-sm text-slate-400">No skills recorded.</p>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No skills recorded.</p>
           ) : (
-            <div className="flex flex-wrap gap-2 pt-1">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
               {skills.map((skill) => (
                 <SkillBadge key={skill.id} skill={skill} />
               ))}
@@ -99,23 +99,22 @@ export default function DeveloperProfilePage({ params }: PageProps) {
           )}
         </div>
 
-        <div className="card p-6 space-y-4">
-          <h2 className="text-lg font-bold text-slate-100 flex items-center gap-2 border-b border-slate-800 pb-3">
-            <span>🏢</span> Associated Clients &amp; Companies
-          </h2>
+        <div className="card card-responsive-padding" style={{ padding: '20px', borderRadius: 0, minWidth: 0 }}>
+          <SectionHeading>Client Companies</SectionHeading>
           {companies.length === 0 ? (
-            <p className="text-sm text-slate-400">No client companies linked to projects.</p>
+            <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No companies linked.</p>
           ) : (
-            <div className="space-y-3 pt-1">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {companies.map((company) => (
                 <div
                   key={company.id}
-                  className="flex items-center justify-between p-3 rounded-lg bg-slate-800/40 border border-slate-700/50"
+                  className="card-inset"
+                  style={{ padding: '10px 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderRadius: 0, minWidth: 0 }}
                 >
-                  <span className="text-sm font-semibold text-slate-200">
+                  <span style={{ fontSize: '13px', fontWeight: 500, color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {company.name}
                   </span>
-                  <span className="text-xs text-indigo-300 font-medium px-2 py-0.5 rounded bg-indigo-950/60 border border-indigo-800/40">
+                  <span style={{ fontSize: '11px', color: 'var(--text-muted)', flexShrink: 0 }}>
                     {company.industry}
                   </span>
                 </div>
@@ -125,14 +124,14 @@ export default function DeveloperProfilePage({ params }: PageProps) {
         </div>
       </div>
 
-      <div className="space-y-6">
-        <h2 className="text-2xl font-bold text-slate-100 flex items-center gap-2">
-          <span>🚀</span> Featured Projects ({projects.length})
-        </h2>
+      <div style={{ marginBottom: '32px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <SectionHeading>Projects ({projects.length})</SectionHeading>
+        </div>
         {projects.length === 0 ? (
-          <p className="text-sm text-slate-400">No projects found for this developer.</p>
+          <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>No projects recorded.</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '14px' }}>
             {projects.map((project) => (
               <ProjectCard key={project.id} project={project} />
             ))}
@@ -141,92 +140,64 @@ export default function DeveloperProfilePage({ params }: PageProps) {
       </div>
 
       {relatedState.status === 'success' && (
-        <div className="space-y-6 pt-6 border-t border-slate-800">
-          <div className="space-y-1">
-            <h2 className="text-xl font-bold text-slate-100 flex items-center gap-2">
-              <span>🕸️</span> Multi-Hop Graph Traversal Insights
-            </h2>
-            <p className="text-sm text-slate-400">
-              Developers connected to {developer.name} through shared skills and multi-hop tech stack affinities.
+        <div>
+          <div style={{ height: '1px', background: 'var(--border-subtle)', marginBottom: '28px' }} />
+
+          <div style={{ marginBottom: '16px' }}>
+            <SectionHeading>Graph Traversal: Related Developers</SectionHeading>
+            <p style={{ fontSize: '13px', color: 'var(--text-secondary)', margin: 0 }}>
+              Developers connected to {developer.name} through shared skills or complementary technology stacks.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="card p-6 space-y-4">
-              <h3 className="text-base font-bold text-slate-200 flex items-center gap-2">
-                <span>🎯</span> Shared Skill Peers (3-Hop)
-              </h3>
-              <div className="space-y-3">
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: '16px' }}>
+            <div className="card card-responsive-padding" style={{ padding: '20px', borderRadius: 0, minWidth: 0 }}>
+              <div style={{ marginBottom: '14px' }}>
+                <SectionHeading>Skill Peers</SectionHeading>
+                <code className="mono" style={{ color: 'var(--text-muted)', fontSize: '11px', wordBreak: 'break-all' }}>
+                  (d)-[:KNOWS]-&gt;(s)&lt;-[:KNOWS]-(peer)
+                </code>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {relatedState.data.skillPeers.length === 0 ? (
-                  <p className="text-xs text-slate-400">No skill peers found.</p>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>None found.</p>
                 ) : (
                   relatedState.data.skillPeers.map((peer) => (
-                    <div
+                    <AvatarRow
                       key={peer.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-slate-800/40 border border-slate-700/50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={peer.avatarUrl}
-                          alt={peer.name}
-                          className="w-8 h-8 rounded-full object-cover"
-                        />
-                        <div>
-                          <Link
-                            href={`/developers/${peer.id}`}
-                            className="text-sm font-semibold text-slate-200 hover:text-indigo-400 transition-colors"
-                          >
-                            {peer.name}
-                          </Link>
-                          <p className="text-xs text-slate-400">
-                            {peer.sharedSkills.join(', ')}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-xs font-semibold text-indigo-300">
-                        {peer.sharedCount} shared
-                      </span>
-                    </div>
+                      id={peer.id}
+                      name={peer.name}
+                      avatarUrl={peer.avatarUrl}
+                      subtitle={peer.sharedSkills.join(', ')}
+                      badgeText={peer.sharedCount}
+                      badgeColor="var(--accent)"
+                    />
                   ))
                 )}
               </div>
             </div>
 
-            <div className="card p-6 space-y-4">
-              <h3 className="text-base font-bold text-slate-200 flex items-center gap-2">
-                <span>🔗</span> Tech Stack Trajectory Peers (5-Hop)
-              </h3>
-              <div className="space-y-3">
+            <div className="card card-responsive-padding" style={{ padding: '20px', borderRadius: 0, minWidth: 0 }}>
+              <div style={{ marginBottom: '14px' }}>
+                <SectionHeading>Tech Stack Peers (5-hop)</SectionHeading>
+                <code className="mono" style={{ color: 'var(--text-muted)', fontSize: '11px', wordBreak: 'break-all' }}>
+                  (d)-[:BUILT]-&gt;[:USES]-&gt;(t)-[:RELATED_TO]-&gt;(adj)
+                </code>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                 {relatedState.data.techPeers.length === 0 ? (
-                  <p className="text-xs text-slate-400">No tech peers found.</p>
+                  <p style={{ fontSize: '13px', color: 'var(--text-muted)' }}>None found.</p>
                 ) : (
                   relatedState.data.techPeers.map((peer) => (
-                    <div
+                    <AvatarRow
                       key={peer.id}
-                      className="flex items-center justify-between p-3 rounded-lg bg-slate-800/40 border border-slate-700/50"
-                    >
-                      <div className="flex items-center gap-3">
-                        <img
-                          src={peer.avatarUrl}
-                          alt={peer.name}
-                          className="w-8 h-8 rounded-full object-cover"
-                        />
-                        <div>
-                          <Link
-                            href={`/developers/${peer.id}`}
-                            className="text-sm font-semibold text-slate-200 hover:text-indigo-400 transition-colors"
-                          >
-                            {peer.name}
-                          </Link>
-                          <p className="text-xs text-slate-400">
-                            Bridge: {peer.bridgeTechs.join(', ')}
-                          </p>
-                        </div>
-                      </div>
-                      <span className="text-xs font-semibold text-emerald-400">
-                        {peer.relevance} match score
-                      </span>
-                    </div>
+                      id={peer.id}
+                      name={peer.name}
+                      avatarUrl={peer.avatarUrl}
+                      subtitle={`via ${peer.bridgeTechs.join(', ')}`}
+                      badgeText={peer.relevance}
+                      badgeColor="#34d399"
+                    />
                   ))
                 )}
               </div>

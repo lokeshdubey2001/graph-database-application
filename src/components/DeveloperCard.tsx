@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ArrowRight } from 'lucide-react';
 import type { Developer } from '@/lib/types';
 
 interface DeveloperCardProps {
@@ -7,45 +8,99 @@ interface DeveloperCardProps {
 
 export default function DeveloperCard({ developer }: DeveloperCardProps) {
   return (
-    <div className="card p-6 flex flex-col justify-between hover:border-indigo-500/50 transition-all duration-200 group">
-      <div>
-        <div className="flex items-start justify-between gap-4 mb-4">
-          <div className="flex items-center gap-3.5">
-            <img
-              src={developer.avatarUrl}
-              alt={developer.name}
-              className="w-12 h-12 rounded-full object-cover border border-slate-700 group-hover:border-indigo-500/40 transition-colors"
-            />
-            <div>
-              <h3 className="text-base font-bold text-slate-100 group-hover:text-indigo-400 transition-colors">
-                {developer.name}
-              </h3>
-              <p className="text-xs text-slate-400 flex items-center gap-1 mt-0.5">
-                <span>📍</span> {developer.location}
-              </p>
-            </div>
+    <Link
+      href={`/developers/${developer.id}`}
+      className="card-interactive p-5 flex flex-col gap-4 block"
+      style={{ textDecoration: 'none', display: 'flex', flexDirection: 'column', borderRadius: 0 }}
+    >
+      <div style={{ display: 'flex', alignItems: 'flex-start', gap: '12px' }}>
+        <img
+          src={developer.avatarUrl}
+          alt={developer.name}
+          width={40}
+          height={40}
+          style={{
+            width: '40px',
+            height: '40px',
+            borderRadius: 0,
+            objectFit: 'cover',
+            border: '1px solid var(--border-color)',
+            flexShrink: 0,
+          }}
+        />
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+            <h3
+              style={{
+                fontSize: '14px',
+                fontWeight: 600,
+                color: 'var(--text-primary)',
+                margin: 0,
+                lineHeight: '1.4',
+              }}
+            >
+              {developer.name}
+            </h3>
+            <span
+              style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                color: 'var(--text-muted)',
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              {developer.yearsExp}y exp
+            </span>
           </div>
-          <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-indigo-950/60 text-indigo-300 border border-indigo-800/40 whitespace-nowrap">
-            {developer.yearsExp} yrs exp
-          </span>
+          <p
+            style={{
+              fontSize: '12px',
+              color: 'var(--text-muted)',
+              margin: '2px 0 0',
+              lineHeight: '1.4',
+            }}
+          >
+            {developer.location}
+          </p>
         </div>
-
-        <p className="text-sm text-slate-300 line-clamp-2 mb-4 leading-relaxed">
-          {developer.bio}
-        </p>
       </div>
 
-      <div className="pt-4 border-t border-slate-800/80 flex items-center justify-between mt-2">
-        <span className="text-xs font-medium text-slate-400 group-hover:text-slate-300 transition-colors">
-          View Graph Profile &rarr;
-        </span>
-        <Link
-          href={`/developers/${developer.id}`}
-          className="btn-ghost px-3 py-1.5 text-xs font-medium"
+      <p
+        style={{
+          fontSize: '13px',
+          color: 'var(--text-secondary)',
+          lineHeight: '1.55',
+          margin: 0,
+          display: '-webkit-box',
+          WebkitLineClamp: 2,
+          WebkitBoxOrient: 'vertical',
+          overflow: 'hidden',
+        }}
+      >
+        {developer.bio}
+      </p>
+
+      <div
+        style={{
+          marginTop: 'auto',
+          paddingTop: '12px',
+          borderTop: '1px solid var(--border-subtle)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <span
+          style={{
+            fontSize: '12px',
+            color: 'var(--text-muted)',
+          }}
         >
-          Explore Profile
-        </Link>
+          View profile
+        </span>
+        <ArrowRight size={14} style={{ color: 'var(--accent)' }} />
       </div>
-    </div>
+    </Link>
   );
 }

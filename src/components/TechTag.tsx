@@ -1,17 +1,16 @@
 import type { Technology } from '@/lib/types';
+import { Badge } from '@/components/ui/Badge';
 
 interface TechTagProps {
-  tech: Technology;
+  tech: Pick<Technology, 'id' | 'name' | 'domain'>;
 }
 
 export default function TechTag({ tech }: TechTagProps) {
-  const domainClass = `tag-${tech.domain || 'backend'}`;
+  const domain = tech.domain || 'backend';
 
   return (
-    <span
-      className={`px-2.5 py-0.5 text-xs font-mono font-medium rounded ${domainClass} inline-block`}
-    >
+    <Badge variant={domain as 'frontend' | 'backend' | 'infra' | 'data'} mono>
       {tech.name}
-    </span>
+    </Badge>
   );
 }

@@ -37,6 +37,10 @@ export const api = {
     ecosystem: (id: string) =>
       fetchJson<SkillEcosystemResponse>(`${BASE}/skills/${id}/ecosystem`),
   },
+  technologies: {
+    list: () =>
+      fetchJson<{ technologies: Array<{ id: string; name: string; domain: string }> }>(`${BASE}/technologies`),
+  },
   search: (q: string) =>
     fetchJson<SearchResponse>(`${BASE}/search?q=${encodeURIComponent(q)}`),
 };
