@@ -249,13 +249,28 @@ RETURN coTech.id AS id, coTech.name AS name, coTech.domain AS domain, p.id AS pr
 
 ---
 
+## Setting Up CognoDB Cloud
+
+DevGraph runs against a CognoDB instance accessed via openCypher over the Bolt protocol. Follow these steps to provision a free instance and capture the connection credentials the app needs.
+
+1. **Create an account.** Go to https://console.cognodb.com/signup and sign up. The free tier requires no credit card.
+2. **Create a free instance.** From the console, create a free (c0) instance and pick a region. It provisions in under a minute. Each workspace gets one free instance.
+3. **Save your connection details.** You will get a connection URI of the form `bolt+s://<instance-id>.databases.cognodb.cloud` and a generated password for the user `cognodb`. The password is shown exactly once — copy or download it immediately and store it where your code reads its secrets.
+4. **Connect with an official Neo4j driver.** This project already uses the official `neo4j-driver` Bolt connector. Point it at your `bolt+s://` URI with username `cognodb` and your saved password (see [Environment Setup](#environment-setup)), then run the schema/seed scripts and queries. No other code changes are needed.
+
+### Free Tier Limits
+
+The free (c0) instance is small: burstable 0.5 vCPU, 256 MB RAM, 1 GB disk, up to 200 connections. Size your dataset accordingly — a few thousand to a few hundred thousand nodes and relationships is enough to demonstrate your use case clearly.
+
+---
+
 ## Getting Started
 
 ### Prerequisites
 
 - **Node.js**: v18.0.0 or higher
 - **npm**: v9.0.0 or higher
-- **CognoDB Instance**: Accessible via openCypher over Bolt protocol
+- **CognoDB Instance**: Accessible via openCypher over Bolt protocol (see [Setting Up CognoDB Cloud](#setting-up-cognodb-cloud))
 
 ### Environment Setup
 
