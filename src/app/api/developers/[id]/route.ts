@@ -7,13 +7,18 @@ export async function GET(
 ) {
   try {
     const { id } = await params;
-    const data = await getDeveloperById(id);
-    if (!data) {
-      return NextResponse.json({ error: 'Developer not found' }, { status: 404 });
+    if (!id || !id.trim()) {
+      return NextResponse.json({ error: 'Developer ID is required' }, { status: 400 });
     }
+
+    const data = await getDeveloperById(id.trim());
+    if (!data) {
+      return NextResponse.json({ error: `Developer '${id}' not found` }, { status: 404 });
+    }
+
     return NextResponse.json(data);
   } catch (err) {
-    const message = err instanceof Error ? err.message : 'Failed to fetch developer profile';
+    const message = err instanceof Error ? err.message : 'Internal Server Error';
     return NextResponse.json({ error: message }, { status: 500 });
   }
 }
