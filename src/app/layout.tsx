@@ -25,103 +25,47 @@ export default function RootLayout({
           crossOrigin="anonymous"
         />
         <link
-          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap"
+          href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
           rel="stylesheet"
         />
       </head>
-      <body>
-        <nav
-          style={{
-            borderBottom: '1px solid var(--color-border)',
-            background: 'var(--color-surface-1)',
-          }}
-        >
-          <div
-            style={{
-              maxWidth: '1200px',
-              margin: '0 auto',
-              padding: '0 1.5rem',
-              height: '64px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-            }}
-          >
+      <body className="bg-slate-950 text-slate-100 min-h-screen antialiased selection:bg-indigo-500 selection:text-white">
+        <header className="sticky top-0 z-50 backdrop-blur-md bg-slate-950/80 border-b border-slate-800/80">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
             <a
               href="/"
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '10px',
-                textDecoration: 'none',
-              }}
+              className="flex items-center gap-3 text-decoration-none group"
+              aria-label="DevGraph Home"
             >
-              <span
-                style={{
-                  width: '32px',
-                  height: '32px',
-                  borderRadius: '8px',
-                  background:
-                    'linear-gradient(135deg, var(--color-accent), var(--color-accent-light))',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  fontSize: '16px',
-                  fontWeight: '700',
-                  color: 'white',
-                  flexShrink: 0,
-                }}
-              >
+              <div className="w-8 h-8 rounded-lg bg-indigo-600 flex items-center justify-center font-black text-white text-base shadow-lg shadow-indigo-600/30 group-hover:scale-105 transition-transform">
                 D
-              </span>
-              <span
-                style={{
-                  fontSize: '18px',
-                  fontWeight: '700',
-                  color: 'var(--color-text-primary)',
-                  letterSpacing: '-0.02em',
-                }}
-              >
-                Dev<span style={{ color: 'var(--color-accent-light)' }}>Graph</span>
+              </div>
+              <span className="text-xl font-extrabold tracking-tight text-slate-100">
+                Dev<span className="text-indigo-400">Graph</span>
               </span>
             </a>
 
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <a href="/" className="nav-link">
+            <nav className="flex items-center gap-1 sm:gap-2">
+              <a
+                href="/"
+                className="px-3.5 py-2 rounded-lg text-sm font-semibold text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors"
+              >
                 Developers
               </a>
-              <a href="/explore" className="nav-link">
-                Explore
+              <a
+                href="/explore"
+                className="px-3.5 py-2 rounded-lg text-sm font-semibold text-slate-300 hover:text-white hover:bg-slate-800/60 transition-colors flex items-center gap-1.5"
+              >
+                <span>Explore Graph</span>
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
               </a>
-            </div>
+            </nav>
           </div>
-        </nav>
+        </header>
 
-        <main
-          style={{
-            maxWidth: '1200px',
-            margin: '0 auto',
-            padding: '2rem 1.5rem',
-          }}
-        >
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 sm:py-10">
           {children}
         </main>
-
-        <style>{`
-          .nav-link {
-            padding: 6px 14px;
-            border-radius: 8px;
-            font-size: 14px;
-            font-weight: 500;
-            color: var(--color-text-secondary);
-            text-decoration: none;
-            transition: background 0.15s ease, color 0.15s ease;
-          }
-          .nav-link:hover {
-            background: var(--color-surface-3);
-            color: var(--color-text-primary);
-          }
-        `}</style>
       </body>
     </html>
   );

@@ -11,7 +11,8 @@ function extractInteger(val: unknown): number {
 }
 
 export async function searchGraph(q: string): Promise<SearchResponse> {
-  const queryParam = `(?i).*${q.trim()}.*`;
+  const sanitized = q.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const queryParam = `(?i).*${sanitized}.*`;
 
   const devsRes = await executeQuery(
     `MATCH (d:Developer)
