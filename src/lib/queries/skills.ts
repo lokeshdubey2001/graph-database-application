@@ -136,3 +136,87 @@ export async function getSkillEcosystem(
     relatedTechnologies,
   };
 }
+
+export async function getTechEcosystem(techId: string) {
+  const techRes = await executeQuery(
+    `MATCH (t:Technology)
+     WHERE toLower(t.id) = toLower($techId) OR toLower(t.name) = toLower($techId)
+     RETURN t.id AS id, t.name AS name, t.domain AS domain LIMIT 1`,
+    { techId }
+  );
+
+  if (techRes.records.length === 0) return null;
+  const tRec = techRes.records[0];
+  const technology = {
+    id: String(tRec.get('id')),
+    name: String(tRec.get('name')),
+    domain: tRec.get('domain'),
+  };
+
+  const devsRes = await executeQuery(
+    `MATCH (t:Technology {id: $id})<-[:USES]-(p:Project)<-[:BUILT]-(d:Developer)
+     RETURN DISTINCT d.id AS id, d.name AS name, d.bio AS bio, d.location AS location,
+            d.avatarUrl AS avatarUrl, d.yearsExp AS yearsExp, p.name AS projName`,
+    { id: technology.id }
+  );
+
+  const developers = devsRes.records.map((r) => ({
+    id: String(r.get('id')),
+    name: String(r.get('name')),
+    bio: String(r.get('bio')),
+    location: String(r.get('location')),
+    avatarUrl: String(r.get('avatarUrl')),
+    yearsExp: extractInteger(r.get('yearsExp')),
+    projectName: String(r.get('projName')),
+  }));
+
+  const coTechsRes = await executeQuery(
+    `MATCH (t:Technology {id: $id})<-[:USES]-(p:Project)-[:USES]->(coTech:Technology)
+     WHERE coTech.id <> $id
+     RETURN coTech.id AS id, coTech.name AS name, coTech.domain AS domain, p.id AS projId`,
+    { id: technology.id }
+  );
+
+  const coTechMap = new Map<string, { tech: { id: string; name: string; domain: string }; projects: Set<string> }>();
+  for (const r of coTechsRes.records) {
+    const coId = String(r.get('id'));
+    if (!coTechMap.has(coId)) {
+      coTechMap.set(coId, {
+        tech: {
+          id: coId,
+          name: String(r.get('name')),
+          domain: String(r.get('domain')),
+        },
+        projects: new Set(),
+      });
+    }
+    coTechMap.get(coId)?.projects.add(String(r.get('projId')));
+  }
+
+  const coTechnologies = Array.from(coTechMap.values())
+    .map((item) => ({
+      ...item.tech,
+      projectCount: item.projects.size,
+    }))
+    .sort((a, b) => b.projectCount - a.projectCount);
+
+  const relTechsRes = await executeQuery(
+    `MATCH (t:Technology {id: $id})-[r:RELATED_TO]-(relTech:Technology)
+     RETURN relTech.id AS id, relTech.name AS name, relTech.domain AS domain, r.strength AS strength`,
+    { id: technology.id }
+  );
+
+  const relatedTechnologies = relTechsRes.records.map((r) => ({
+    id: String(r.get('id')),
+    name: String(r.get('name')),
+    domain: String(r.get('domain')),
+    strength: extractInteger(r.get('strength')),
+  }));
+
+  return {
+    technology,
+    developers,
+    coTechnologies,
+    relatedTechnologies,
+  };
+}
