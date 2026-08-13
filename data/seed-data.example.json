@@ -1,0 +1,78 @@
+{
+  "developers": [
+    {
+      "id": "dev_sample_1",
+      "name": "Jane Doe",
+      "bio": "Systems Engineer specializing in distributed databases.",
+      "location": "San Francisco, CA",
+      "avatarUrl": "https://example.com/avatar.jpg",
+      "yearsExp": 5
+    }
+  ],
+  "skills": [
+    {
+      "id": "skill_sample_1",
+      "name": "TypeScript",
+      "category": "language"
+    }
+  ],
+  "technologies": [
+    {
+      "id": "tech_sample_1",
+      "name": "CognoDB",
+      "domain": "data"
+    }
+  ],
+  "companies": [
+    {
+      "id": "comp_sample_1",
+      "name": "Acme Cloud",
+      "industry": "Enterprise Cloud Services"
+    }
+  ],
+  "projects": [
+    {
+      "id": "proj_sample_1",
+      "name": "Distributed Analytics Engine",
+      "description": "High-speed graph query engine.",
+      "url": "https://github.com/example/repo",
+      "year": 2024
+    }
+  ],
+  "devSkills": [
+    {
+      "devId": "dev_sample_1",
+      "skillId": "skill_sample_1",
+      "level": "expert",
+      "since": 2019
+    }
+  ],
+  "devProjects": [
+    {
+      "devId": "dev_sample_1",
+      "projId": "proj_sample_1",
+      "role": "lead",
+      "year": 2024
+    }
+  ],
+  "projTechs": [
+    {
+      "projId": "proj_sample_1",
+      "techId": "tech_sample_1",
+      "primary": true
+    }
+  ],
+  "projCompanies": [
+    {
+      "projId": "proj_sample_1",
+      "compId": "comp_sample_1"
+    }
+  ],
+  "techRelations": [
+    {
+      "fromId": "tech_sample_1",
+      "toId": "tech_sample_1",
+      "strength": 0.9
+    }
+  ]
+}
