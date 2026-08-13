@@ -68,35 +68,66 @@ export async function getSkillEcosystem(
 
   const techsRes = await executeQuery(
     `MATCH (s:Skill {id: $skillId})<-[:KNOWS]-(d:Developer)-[:BUILT]->(:Project)-[:USES]->(t:Technology)
-     WITH t, count(DISTINCT d) AS devCount
-     RETURN t.id AS id, t.name AS name, t.domain AS domain, devCount
-     ORDER BY devCount DESC LIMIT 10`,
+     RETURN t.id AS id, t.name AS name, t.domain AS domain, d.id AS devId`,
     { skillId: skill.id }
   );
 
-  const technologies = techsRes.records.map((r) => ({
-    id: String(r.get('id')),
-    name: String(r.get('name')),
-    domain: r.get('domain'),
-    devCount: extractInteger(r.get('devCount')),
-  }));
+  const techDevsMap = new Map<string, { tech: { id: string; name: string; domain: 'frontend' | 'backend' | 'infra' | 'data' }; devs: Set<string> }>();
+  for (const r of techsRes.records) {
+    const techId = String(r.get('id'));
+    if (!techDevsMap.has(techId)) {
+      techDevsMap.set(techId, {
+        tech: {
+          id: techId,
+          name: String(r.get('name')),
+          domain: r.get('domain'),
+        },
+        devs: new Set(),
+      });
+    }
+    techDevsMap.get(techId)?.devs.add(String(r.get('devId')));
+  }
+
+  const technologies = Array.from(techDevsMap.values())
+    .map((item) => ({
+      ...item.tech,
+      devCount: item.devs.size,
+    }))
+    .sort((a, b) => b.devCount - a.devCount)
+    .slice(0, 10);
 
   const relTechsRes = await executeQuery(
     `MATCH (s:Skill {id: $skillId})<-[:KNOWS]-(d:Developer)-[:BUILT]->(:Project)-[:USES]->(t1:Technology)
-     MATCH (t1)-[r:RELATED_TO*1..2]-(t2:Technology)
-     WHERE NOT (s:Skill {id: $skillId})<-[:KNOWS]-(d)-[:BUILT]->(:Project)-[:USES]->(t2)
-     WITH t2, count(DISTINCT d) AS weight
-     RETURN t2.id AS id, t2.name AS name, t2.domain AS domain, weight
-     ORDER BY weight DESC LIMIT 5`,
+     MATCH (t1)-[r:RELATED_TO]-(t2:Technology)
+     RETURN t2.id AS id, t2.name AS name, t2.domain AS domain, d.id AS devId`,
     { skillId: skill.id }
   );
 
-  const relatedTechnologies = relTechsRes.records.map((r) => ({
-    id: String(r.get('id')),
-    name: String(r.get('name')),
-    domain: r.get('domain'),
-    weight: extractInteger(r.get('weight')),
-  }));
+  const directTechIds = new Set(technologies.map((t) => t.id));
+  const relTechsMap = new Map<string, { tech: { id: string; name: string; domain: 'frontend' | 'backend' | 'infra' | 'data' }; devs: Set<string> }>();
+  for (const r of relTechsRes.records) {
+    const relId = String(r.get('id'));
+    if (directTechIds.has(relId)) continue;
+    if (!relTechsMap.has(relId)) {
+      relTechsMap.set(relId, {
+        tech: {
+          id: relId,
+          name: String(r.get('name')),
+          domain: r.get('domain'),
+        },
+        devs: new Set(),
+      });
+    }
+    relTechsMap.get(relId)?.devs.add(String(r.get('devId')));
+  }
+
+  const relatedTechnologies = Array.from(relTechsMap.values())
+    .map((item) => ({
+      ...item.tech,
+      weight: item.devs.size,
+    }))
+    .sort((a, b) => b.weight - a.weight)
+    .slice(0, 5);
 
   return {
     skill,
