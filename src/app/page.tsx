@@ -49,7 +49,7 @@ export default function HomePage() {
     'Redis',
     'Docker',
     'Kubernetes',
-    'Kafka',
+    'Apache Kafka',
   ];
 
   return (
@@ -60,10 +60,13 @@ export default function HomePage() {
           Powered by CognoDB openCypher Graph Engine
         </div>
         <h1 className="text-4xl font-extrabold text-slate-100 tracking-tight sm:text-5xl">
-          Dev<span className="text-indigo-400">Graph</span>
+          Dev<span className="text-indigo-400">Graph</span> Explorer
         </h1>
-        <p className="text-base text-slate-400 leading-relaxed max-w-2xl mx-auto">
-          Explore developer profiles, technical proficiencies, project portfolios, and multi-hop technology relationships across the graph ecosystem.
+        <p className="text-base text-slate-300 leading-relaxed max-w-2xl mx-auto font-medium">
+          Explore developers through their skills and project technologies.
+        </p>
+        <p className="text-xs text-slate-400 max-w-xl mx-auto">
+          Discover direct competency relationships <code className="text-indigo-300 font-mono">(Developer)-[:KNOWS]-&gt;(Skill)</code> and multi-hop project stack relationships <code className="text-emerald-300 font-mono">(Developer)-[:BUILT]-&gt;(Project)-[:USES]-&gt;(Technology)</code>.
         </p>
       </div>
 
@@ -86,8 +89,8 @@ export default function HomePage() {
 
       {state.status === 'success' && filteredDevelopers.length === 0 && (
         <EmptyState
-          title="No developers match your filters"
-          description="Try clearing your search term or skill/technology filters to view developers."
+          title="No developers found for this relationship query"
+          description="Try selecting a different skill or technology filter to explore graph connections."
         />
       )}
 
