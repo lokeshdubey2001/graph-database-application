@@ -1,4 +1,4 @@
-# DevGraph
+# <img src="/public/logo.svg" alt="DevGraph" width="28" height="28" /> DevGraph
 
 DevGraph is a graph-powered developer knowledge and skill exploration web application. It models complex connections between software engineers, their proficiency with skills, the projects they have built, the technologies used in those projects, client companies, and technical stack relationships.
 
