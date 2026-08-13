@@ -1,148 +1,390 @@
-# DevGraph — Developer Knowledge & Skill Explorer
+# DevGraph
 
-> A web application backed by CognoDB to model and explore relationships between developers, their skills, projects, and technologies.
+DevGraph is a graph-powered developer knowledge and skill exploration web application. It models complex connections between software engineers, their proficiency with skills, the projects they have built, the technologies used in those projects, client companies, and technical stack relationships.
+
+Backed by **CognoDB** (accessed via openCypher over the official `neo4j-driver` Bolt connection), DevGraph enables multi-hop relationship discovery—such as finding developers connected through shared project tech stack ecosystems or identifying technology co-occurrences across projects.
+
+---
+
+## Overview
+
+Traditional developer directories store flat lists of skills or rely on keyword matching, failing to capture how skills and technologies intersect in practice. DevGraph solves this by modeling developer expertise as a connected knowledge graph:
+
+- **Direct Skill Knowledge**: Developers explicitly possess skills at specific proficiency levels (`beginner`, `intermediate`, `expert`).
+- **Project Provenance**: Developers build projects that leverage specific technologies for client companies.
+- **Graph Traversal & Ecosystem Discovery**: Navigating 3-hop and 5-hop relationships reveals developers who work with complementary tech stacks and co-occurring technologies across projects.
+
+---
 
 ## Why a Graph Database?
 
-Graph databases are a natural fit for this domain because developer data is inherently relational in a **many-to-many, multi-hop traversal** pattern:
+### The Relational Overhead
 
-- A developer knows many skills; a skill is known by many developers.
-- A project uses many technologies; technologies are related to each other.
-- Finding "developers with similar tech stack trajectories" requires traversing multi-hop relationships across nodes.
+In a relational database (SQL), modeling this domain requires a normalized schema with numerous junction tables:
 
-In a relational database, multi-hop queries require multiple `JOIN` statements across bridge tables and self-referencing tables. In CognoDB via openCypher, graph traversals are concise and natural:
-
-```cypher
-MATCH (d:Developer {id: $id})-[:BUILT]->(:Project)-[:USES]->(t:Technology)
-      -[:RELATED_TO]->(adj:Technology)<-[:USES]-(:Project)<-[:BUILT]-(expert:Developer)
-WHERE expert.id <> $id
-RETURN expert, collect(DISTINCT adj.name) AS bridgeTechs
-ORDER BY count(*) DESC LIMIT 5
+```
+developers ────< developer_skills >──── skills
+developers ────< developer_projects >──── projects ────< project_technologies >──── technologies
+                                        projects ────< project_companies >──── companies
+                                        technologies ────< technology_relations >──── technologies
 ```
 
-## Graph Model
+To answer a question such as:
+> *"Find developers connected to React through their project histories and discover co-occurring technologies used alongside React in those projects."*
+
+A relational SQL database requires joining 6 to 7 tables:
+
+```sql
+SELECT d.id, d.name, p.name AS project_name, t2.name AS co_tech
+FROM developers d
+JOIN developer_projects dp ON d.id = dp.developer_id
+JOIN projects p ON dp.project_id = p.id
+JOIN project_technologies pt ON p.id = pt.project_id
+JOIN technologies t ON pt.technology_id = t.id
+JOIN project_technologies pt2 ON p.id = pt2.project_id
+JOIN technologies t2 ON pt2.technology_id = t2.id
+WHERE LOWER(t.name) = 'react' AND t2.id <> t.id
+GROUP BY d.id, d.name, p.name, t2.name;
+```
+
+As traversal depth increases (e.g., 3-hop to 5-hop relationship walks), SQL query complexity explodes with nested subqueries, recursive CTEs, and severe JOIN performance penalties.
+
+### The Graph Approach
+
+In CognoDB using openCypher, graph traversals follow named, directed relationship paths naturally:
+
+```cypher
+MATCH (d:Developer)-[:BUILT]->(p:Project)-[:USES]->(t:Technology)
+WHERE toLower(t.name) = 'react'
+MATCH (p)-[:USES]->(coTech:Technology)
+WHERE coTech.id <> t.id
+RETURN d.name, p.name, coTech.name
+```
+
+Graph database index-free adjacency allows multi-hop traversals to execute in constant or linear time relative to the traversed subgraph, regardless of the overall database size.
+
+---
+
+## Graph Data Model
 
 ### Node Labels
 
-| Label | Key Properties |
-|---|---|
-| `Developer` | `id`, `name`, `bio`, `location`, `avatarUrl`, `yearsExp` |
-| `Skill` | `id`, `name`, `category` (`language` \| `framework` \| `tool` \| `concept`) |
-| `Project` | `id`, `name`, `description`, `url`, `year` |
-| `Technology` | `id`, `name`, `domain` (`frontend` \| `backend` \| `infra` \| `data`) |
-| `Company` | `id`, `name`, `industry` |
+| Label | Description | Key Properties |
+|---|---|---|
+| `Developer` | Software engineer profile | `id`, `name`, `bio`, `location`, `avatarUrl`, `yearsExp` |
+| `Skill` | Explicit skill or domain competency | `id`, `name`, `category` (`language` \| `framework` \| `tool` \| `concept`) |
+| `Project` | Real-world software project built by developer | `id`, `name`, `description`, `url`, `year` |
+| `Technology` | Specific tool or library used in a project | `id`, `name`, `domain` (`frontend` \| `backend` \| `infra` \| `data`) |
+| `Company` | Client or organization for whom a project was built | `id`, `name`, `industry` |
 
 ### Relationship Types
 
-| Relationship | Direction | Properties |
-|---|---|---|
-| `KNOWS` | Developer → Skill | `level` (beginner/intermediate/expert), `since` (year) |
-| `BUILT` | Developer → Project | `role` (solo/lead/contributor), `year` |
-| `USES` | Project → Technology | `primary` (boolean) |
-| `FOR` | Project → Company | — |
-| `RELATED_TO` | Technology → Technology | `strength` (0–1) |
+| Relationship | Source Node → Target Node | Properties | Description |
+|---|---|---|---|
+| `KNOWS` | `Developer` → `Skill` | `level` (`beginner` \| `intermediate` \| `expert`), `since` | Explicit skill declaration |
+| `BUILT` | `Developer` → `Project` | `role` (`lead` \| `solo` \| `contributor`), `year` | Project authorship |
+| `USES` | `Project` → `Technology` | `primary` (boolean) | Technologies used in project |
+| `FOR` | `Project` → `Company` | — | Target company for project |
+| `RELATED_TO` | `Technology` → `Technology` | `strength` (number 0–1) | Conceptual tech stack adjacency |
 
-```
-(Developer)-[:KNOWS]──>(Skill)
-(Developer)-[:BUILT]──>(Project)-[:USES]──>(Technology)
-                       (Project)-[:FOR]───>(Company)
-                    (Technology)-[:RELATED_TO]──>(Technology)
-```
+### Graph Schema Diagram
 
-## Important Queries
+```mermaid
+graph LR
+    Developer["Developer<br/>(id, name, bio, location, yearsExp)"]
+    Skill["Skill<br/>(id, name, category)"]
+    Project["Project<br/>(id, name, description, year)"]
+    Technology["Technology<br/>(id, name, domain)"]
+    Company["Company<br/>(id, name, industry)"]
 
-### 1. Developer Profile (2-hop traversal)
-
-Fetches a developer with all their skills and projects including each project's technologies in a single Cypher query.
-
-### 2. Similar Developers via Shared Skills (3-hop)
-
-`Developer → Skill ← Developer` — finds peers by counting shared skill nodes.
-
-### 3. "Who Works Like Me?" (5-hop — graph showcase)
-
-`Developer → Project → Technology → RELATED_TO → Technology ← Project ← Developer` — finds developers who use technologies adjacent to yours.
-
-### 4. Skill Ecosystem (variable-length traversal)
-
-`RELATED_TO*1..2` — walks up to two hops across related technologies from a skill's ecosystem.
-
-## Setup
-
-### Prerequisites
-
-- Node.js 18+
-- CognoDB instance exposing openCypher over Bolt
-
-### Environment Variables
-
-```bash
-cp .env.example .env.local
+    Developer -- "KNOWS {level, since}" --> Skill
+    Developer -- "BUILT {role, year}" --> Project
+    Project -- "USES {primary}" --> Technology
+    Project -- "FOR" --> Company
+    Technology -- "RELATED_TO {strength}" --> Technology
 ```
 
-Edit `.env.local`:
+---
+
+## Architecture
+
+DevGraph enforces strict layer separation. All Cypher query execution and database session management are encapsulated on the server. The client layer consumes clean REST APIs and never constructs Cypher strings or handles database connections directly.
 
 ```
-COGNODB_URI=bolt://localhost:7687
-COGNODB_USERNAME=neo4j
-COGNODB_PASSWORD=your_password_here
+┌────────────────────────────────────────────────────────┐
+│                   Next.js App Router                   │
+│             Client Components (React 19)              │
+│      (HomePage, DeveloperProfilePage, ExplorePage)     │
+└───────────────────────────┬────────────────────────────┘
+                            │ HTTP JSON API Fetch
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│                 Server API Route Handlers              │
+│       (/api/developers, /api/skills, /api/search)      │
+└───────────────────────────┬────────────────────────────┘
+                            │ Parameterized Query Calls
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│                  Query Layer & Driver                  │
+│       (src/lib/queries/* via neo4j-driver Bolt)        │
+└───────────────────────────┬────────────────────────────┘
+                            │ openCypher Protocol
+                            ▼
+┌────────────────────────────────────────────────────────┐
+│                    CognoDB Instance                    │
+│            (Node Graph Storage & Query Engine)         │
+└────────────────────────────────────────────────────────┘
 ```
 
-### Install Dependencies
+---
 
-```bash
-npm install
+## Main Graph Queries
+
+All database interactions use parameterized openCypher queries executed via the official `neo4j-driver` session layer.
+
+### 1. Developer Profile & Related Skills (2-hop)
+
+Retrieves a developer profile alongside their skills and projects with associated technologies in a single parameterized round-trip:
+
+```cypher
+MATCH (d:Developer {id: $id})
+OPTIONAL MATCH (d)-[k:KNOWS]->(s:Skill)
+OPTIONAL MATCH (d)-[b:BUILT]->(p:Project)
+OPTIONAL MATCH (p)-[u:USES]->(t:Technology)
+OPTIONAL MATCH (p)-[:FOR]->(c:Company)
+RETURN d,
+       collect(DISTINCT { skill: s, level: k.level, since: k.since }) AS skills,
+       collect(DISTINCT { project: p, role: b.role, company: c, techs: collect(DISTINCT t) }) AS projects
 ```
 
-### Seed the Database
+### 2. Skill Peers (3-hop Traversal)
 
-```bash
-npm run seed
+Finds other developers who share skill competencies with a target developer (`Developer → Skill ← Developer`):
+
+```cypher
+MATCH (d:Developer {id: $id})-[:KNOWS]->(s:Skill)<-[:KNOWS]-(peer:Developer)
+WHERE peer.id <> $id
+RETURN peer.id AS id,
+       peer.name AS name,
+       peer.avatarUrl AS avatarUrl,
+       collect(DISTINCT s.name) AS sharedSkills,
+       count(DISTINCT s) AS sharedCount
+ORDER BY sharedCount DESC, peer.name ASC
+LIMIT 5
 ```
 
-This creates uniqueness constraints and loads nodes and relationships into CognoDB. Safe to re-run (uses `MERGE`).
+### 3. Tech Stack Traversal Peers (5-hop Graph Showcase)
 
-### Run the Application
+Discovers developers connected through technology graph adjacency (`Developer → Project → Technology → RELATED_TO → Technology ← Project ← Developer`):
 
-```bash
-npm run dev
+```cypher
+MATCH (d:Developer {id: $id})-[:BUILT]->(:Project)-[:USES]->(t:Technology)-[:RELATED_TO]-(adj:Technology)<-[:USES]-(:Project)<-[:BUILT]-(peer:Developer)
+WHERE peer.id <> $id
+RETURN peer.id AS id,
+       peer.name AS name,
+       peer.avatarUrl AS avatarUrl,
+       collect(DISTINCT adj.name) AS bridgeTechs,
+       count(DISTINCT adj) AS relevance
+ORDER BY relevance DESC, peer.name ASC
+LIMIT 5
 ```
 
-Open [http://localhost:3000](http://localhost:3000).
+### 4. Technology Ecosystem & Co-occurrence Traversal
 
-## Tech Stack
+Walks project graphs to discover co-occurring technologies used alongside an anchor technology in developer projects:
 
-| Concern | Choice |
-|---|---|
-| Framework | Next.js 16 (App Router) |
-| Language | TypeScript |
-| Styling | Tailwind CSS v4 |
-| Database | CognoDB (openCypher over Bolt) |
-| DB Driver | `neo4j-driver` (official Bolt driver) |
+```cypher
+MATCH (t:Technology)
+WHERE toLower(t.id) = toLower($techId) OR toLower(t.name) = toLower($techId)
+MATCH (t)<-[:USES]-(p:Project)<-[:BUILT]-(d:Developer)
+MATCH (p)-[:USES]->(coTech:Technology)
+WHERE coTech.id <> t.id
+RETURN coTech.id AS id, coTech.name AS name, coTech.domain AS domain, count(DISTINCT p) AS projectCount
+ORDER BY projectCount DESC
+```
+
+### 5. Multi-Filter Search Query
+
+Filters developers by direct skill ownership (`:KNOWS`) and/or project technology usage (`:BUILT → :USES`):
+
+```cypher
+MATCH (d:Developer)
+WHERE ($skill IS NULL OR $skill = '' OR EXISTS {
+  MATCH (d)-[:KNOWS]->(s:Skill) WHERE toLower(s.name) = toLower($skill)
+})
+AND ($tech IS NULL OR $tech = '' OR EXISTS {
+  MATCH (d)-[:BUILT]->(:Project)-[:USES]->(t:Technology) WHERE toLower(t.name) = toLower($tech)
+})
+RETURN d.id AS id, d.name AS name, d.bio AS bio, d.location AS location, d.avatarUrl AS avatarUrl, d.yearsExp AS yearsExp
+ORDER BY d.name ASC
+```
+
+---
 
 ## Project Structure
 
 ```
-src/
-├── app/
-│   ├── api/                    # Server-only route handlers
-│   │   ├── developers/         # GET /api/developers
-│   │   │   └── [id]/           # GET /api/developers/:id
-│   │   │       └── related/    # GET /api/developers/:id/related
-│   │   ├── skills/             # GET /api/skills
-│   │   │   └── [id]/ecosystem/ # GET /api/skills/:id/ecosystem
-│   │   └── search/             # GET /api/search?q=
-│   ├── developers/[id]/        # Profile page
-│   ├── explore/                # Skill ecosystem explorer
-│   ├── globals.css             # Design system
-│   ├── layout.tsx              # Root layout + nav
-│   └── page.tsx                # Developer list page
-├── components/                 # React UI components
-├── hooks/                      # useFetch hook
-└── lib/
-    ├── api.ts                  # Client-side fetch helpers
-    ├── neo4j.ts                # CognoDB driver singleton (server-only)
-    └── types.ts                # Shared TypeScript interfaces
-scripts/
-└── seed.ts                     # CognoDB seed script
+├── scripts/
+│   ├── init-schema.ts           # Schema constraints & index initialization
+│   └── seed.ts                  # CognoDB graph seed dataset loader
+├── src/
+│   ├── app/
+│   │   ├── api/
+│   │   │   ├── developers/      # API endpoints for developer profiles & relations
+│   │   │   ├── health/          # API endpoint for database status check
+│   │   │   ├── search/          # API endpoint for global search
+│   │   │   ├── skills/          # API endpoints for skill list & ecosystems
+│   │   │   └── technologies/    # API endpoints for technology list & ecosystems
+│   │   ├── developers/[id]/     # Profile page with multi-hop peer traversal
+│   │   ├── explore/             # Multi-hop graph traversal explorer page
+│   │   ├── globals.css          # Design system & sharp geometry CSS tokens
+│   │   ├── layout.tsx           # Root layout & responsive navigation header
+│   │   └── page.tsx             # Homepage & interactive developer search
+│   ├── components/
+│   │   ├── ui/                  # Reusable UI primitives (Button, Input, Select, Badge, AvatarRow, ThemeToggle, StateComponents)
+│   │   ├── DeveloperCard.tsx    # Developer card component
+│   │   ├── HeaderNav.tsx        # Responsive header navigation
+│   │   ├── ProjectCard.tsx      # Project card component
+│   │   ├── SearchBar.tsx        # Filter & query input controls
+│   │   ├── SkillBadge.tsx      # Skill level badge component
+│   │   └── TechTag.tsx          # Technology tag component
+│   ├── hooks/
+│   │   └── useFetch.ts          # Generic data fetching hook with state management
+│   └── lib/
+│       ├── api.ts               # Client-side API client wrapper
+│       ├── neo4j.ts             # CognoDB driver singleton & session helper
+│       ├── types.ts             # TypeScript interface definitions
+│       ├── queries/
+│       │   ├── developers.ts    # Parameterized developer Cypher queries
+│       │   ├── search.ts        # Parameterized search Cypher queries
+│       │   └── skills.ts        # Parameterized skill & tech Cypher queries
+│       └── utils/
+│           └── record.ts        # Neo4j record integer parsing & string extraction helpers
+├── .env.example                 # Environment variable template
+├── package.json                 # Project dependencies & scripts
+├── tsconfig.json                # TypeScript configuration
+└── README.md                    # Project documentation
 ```
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- **Node.js**: v18.0.0 or higher
+- **npm**: v9.0.0 or higher
+- **CognoDB Instance**: Accessible via openCypher over Bolt protocol
+
+### Environment Setup
+
+1. Copy the example environment file:
+   ```bash
+   cp .env.example .env.local
+   ```
+
+2. Configure your database credentials in `.env.local`:
+   ```ini
+   COGNODB_URI=bolt://localhost:7687
+   COGNODB_USERNAME=neo4j
+   COGNODB_PASSWORD=your_secure_password
+   ```
+
+### Installation & Initialization
+
+1. Install project dependencies:
+   ```bash
+   npm install
+   ```
+
+2. Initialize database schema constraints:
+   ```bash
+   npm run db:init
+   ```
+
+3. Seed the CognoDB graph database with realistic sample data:
+   ```bash
+   npm run seed
+   ```
+
+4. Start the development server:
+   ```bash
+   npm run dev
+   ```
+
+5. Open [http://localhost:3000](http://localhost:3000) in your browser.
+
+---
+
+## Environment Variables
+
+| Variable | Description | Required | Example |
+|---|---|---|---|
+| `COGNODB_URI` | Bolt connection URI for CognoDB | Yes | `bolt://localhost:7687` |
+| `COGNODB_USERNAME` | Authentication username | Yes | `neo4j` |
+| `COGNODB_PASSWORD` | Authentication password | Yes | `password123` |
+
+*Note: Environment variables are server-side only and are never exposed to the client bundle.*
+
+---
+
+## Screenshots
+
+*(Placeholders for application interface screenshots)*
+
+### Developer Search & Explorer
+![Developer Explorer Search](/public/screenshots/home.png)
+
+### Developer Profile & Multi-Hop Peers
+![Developer Profile Page](/public/screenshots/profile.png)
+
+### Graph Traversal Explorer
+![Graph Traversal Explorer](/public/screenshots/explore.png)
+
+---
+
+## Deployment
+
+DevGraph is built on Next.js App Router and can be deployed to Vercel, Render, AWS, or any Node.js hosting platform.
+
+### Vercel Deployment
+
+1. Push your repository to GitHub / GitLab.
+2. Import the project in Vercel.
+3. Configure the environment variables (`COGNODB_URI`, `COGNODB_USERNAME`, `COGNODB_PASSWORD`) in the Vercel project settings.
+4. Deploy. The build step executes `next build` automatically.
+
+### Production Build Verification
+
+To verify the production build locally:
+
+```bash
+npm run build
+npm run start
+```
+
+---
+
+## Technical Decisions
+
+1. **No Client-Side Cypher Execution**: All Cypher queries are written server-side in parameterized functions (`src/lib/queries/*`). The frontend interacts strictly via typed API endpoints.
+2. **Official Neo4j Driver Singleton**: Database connections reuse a single driver instance across server invocations (`src/lib/neo4j.ts`), managing sessions securely with automatic cleanup (`session.close()`).
+3. **No Heavy Graph Visualization Libraries**: Rather than embedding complex canvas/force-directed libraries, graph relationships are rendered using responsive, semantic UI lists, column hops, and relationship badges.
+4. **Sharp Geometric Design System**: Uses a technical visual aesthetic with CSS custom variables for Light and Dark modes (`globals.css`), eliminating arbitrary rounded corners and unnecessary decorative bloat.
+5. **Strict Atomic Component Reusability**: UI elements (`Button`, `Input`, `Select`, `Badge`, `AvatarRow`, `ThemeToggle`) are standardized and reused across all pages to ensure UI consistency.
+
+---
+
+## Limitations
+
+- **Read-Heavy Focus**: The application is optimized for searching, traversing, and exploring developer knowledge graphs. Write operations are handled via seed and schema scripts.
+- **Dataset Size**: The included seed dataset contains 12 developers, 16 skills, 10 projects, 12 technologies, and 6 companies. Graph queries are designed to scale to larger datasets, but demo dataset size is intentionally compact.
+- **Authentication**: User accounts and authentication tokens are omitted in alignment with MVP scope.
+
+---
+
+## Future Improvements
+
+- **Interactive Graph Canvas**: Optional node-link canvas rendering using lightweight SVG/Canvas for visual subgraph exploration.
+- **Graph Write Interfaces**: UI forms allowing non-technical users to create developers, add skills, and attach new projects directly to the CognoDB graph.
+- **Advanced Graph Analytics**: Integration of openCypher centrality and community detection algorithms (e.g., PageRank, Louvain modularity) to highlight top technical influencers.
