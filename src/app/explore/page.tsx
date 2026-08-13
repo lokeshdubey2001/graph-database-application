@@ -54,7 +54,8 @@ export default function ExplorePage() {
 
   const ecosystemState = useFetch(
     () => api.technologies.ecosystem(selectedTechId!),
-    [selectedTechId]
+    [selectedTechId],
+    { enabled: selectedTechId !== null }
   );
 
   const availableTechs: Technology[] = techsState.status === 'success' ? techsState.data.technologies : [];
